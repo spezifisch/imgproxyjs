@@ -68,15 +68,24 @@ export class ImgProxy extends transformers {
   };
 
   constructor(
-    { url, key, salt, autoreset }: { url: string; key?: string; salt?: string, autoreset: boolean },
+    { url, key, salt, autoreset, presetOnly }: { url: string; key?: string; salt?: string, autoreset: boolean, presetOnly?: boolean },
     options: Options = {},
   ) {
     super();
 
-    this.options.config = { key, salt, url, autoreset: autoreset !== true ? !!autoreset : true };
+    this.options.config = {
+      key,
+      salt,
+      url,
+      autoreset: !!autoreset,
+      presetOnly: !!presetOnly, // default: false
+    };
 
     this.isObject(options);
 
+    if (this.options.config.presetOnly) {
+      this.setOption('preset', 'default');
+    }
     for (const key in options) {
       this.setOption(key, options[key]);
     }
@@ -91,8 +100,9 @@ export class ImgProxy extends transformers {
       return this.resetOption(option);
     }
 
-    this.options.settings[option] = `${this.abbreviations?.[option] ?? option}:${this.transformers?.[option]?.call?.(this, value) ?? value
-      }`;
+    const k = this.abbreviations?.[option] ?? option;
+    const v = this.transformers?.[option]?.call?.(this, value) ?? value;
+    this.options.settings[option] = `${k}:${v}`;
 
     return this;
   }
@@ -110,6 +120,13 @@ export class ImgProxy extends transformers {
     this.setOptions(options);
     
     return this;
+  }
+    
+  getOption(option: string): any {
+    if (!(option in this.options.settings)) {
+        return;
+    }
+    return this.options.settings[option].split(':').pop();
   }
 
   resetDefaultOptions() {
@@ -318,7 +335,14 @@ export class ImgProxy extends transformers {
     }
 
     const encoded_url = ImgProxy.urlSafeBase64(originalImage);
-    const options = Object.values(settings).join('/');
+
+    let options = Object.values(settings).join('/');
+    if (config.presetOnly) {
+      // on preset-only mode no options can be given
+      // and 'pr/preset:' key can be omitted.
+      options = this.getOption('preset');
+    }
+
     const path = options ? `/${options}/${encoded_url}` : `/${encoded_url}`;
 
     let url;
